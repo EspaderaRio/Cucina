@@ -87,6 +87,39 @@
   };
 
   global.DataSDK = DataSDK;
+
+    /* ---------- SDK Compatibility Layer ---------- */
+  DataSDK.init = async function (handler) {
+    if (handler?.onDataChanged) {
+      DataSDK._handler = handler;
+      handler.onDataChanged(state.cart);
+    }
+    return { isOk: true };
+  };
+
+  DataSDK.create = async function (item) {
+    const record = {
+      ...item,
+      __backendId: crypto.randomUUID()
+    };
+    state.cart.push(record);
+
+    DataSDK._handler?.onDataChanged(state.cart);
+    return { isOk: true, data: record };
+  };
+
+  DataSDK.delete = async function (item) {
+    state.cart = state.cart.filter(
+      i => i.__backendId !== item.__backendId
+    );
+
+    DataSDK._handler?.onDataChanged(state.cart);
+    return { isOk: true };
+  };
+
+  // expose lowercase alias
+  global.dataSdk = DataSDK;
+
 })(window);
 
   </script>
@@ -196,6 +229,24 @@
   };
 
   global.ElementSDK = ElementSDK;
+
+    let currentConfig = {};
+
+  ElementSDK.init = function ({ defaultConfig, onConfigChange }) {
+    currentConfig = { ...defaultConfig };
+    ElementSDK.config = currentConfig;
+    ElementSDK._onConfigChange = onConfigChange;
+  };
+
+  ElementSDK.setConfig = function (partial) {
+    currentConfig = { ...currentConfig, ...partial };
+    ElementSDK.config = currentConfig;
+    ElementSDK._onConfigChange?.(currentConfig);
+  };
+
+  // expose lowercase alias
+  global.elementSdk = ElementSDK;
+
 })(window);
 
   </script>
