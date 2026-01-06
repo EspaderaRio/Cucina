@@ -1,0 +1,785 @@
+<!doctype html>
+<html lang="en" class="h-full">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Build Your Own Order - Bella Cucina</title>
+  <script>
+    /* =========================
+   Data SDK
+   Handles state & data only
+========================= */
+
+(function (global) {
+  const DataSDK = {};
+
+  /* ---------- App State ---------- */
+  const state = {
+    config: {},
+    categories: [],
+    menuItems: [],
+    cart: [],
+    selectedCategory: null
+  };
+
+  /* ---------- Config ---------- */
+  DataSDK.setConfig = function (config) {
+    state.config = { ...config };
+  };
+
+  DataSDK.getConfig = function () {
+    return state.config;
+  };
+
+  /* ---------- Categories ---------- */
+  DataSDK.setCategories = function (categories = []) {
+    state.categories = categories;
+  };
+
+  DataSDK.getCategories = function () {
+    return state.categories;
+  };
+
+  DataSDK.selectCategory = function (categoryId) {
+    state.selectedCategory = categoryId;
+  };
+
+  DataSDK.getSelectedCategory = function () {
+    return state.selectedCategory;
+  };
+
+  /* ---------- Menu Items ---------- */
+  DataSDK.setMenuItems = function (items = []) {
+    state.menuItems = items;
+  };
+
+  DataSDK.getMenuItems = function () {
+    if (!state.selectedCategory) return state.menuItems;
+    return state.menuItems.filter(
+      item => item.category_id === state.selectedCategory
+    );
+  };
+
+  /* ---------- Cart ---------- */
+  DataSDK.addToCart = function (item) {
+    state.cart.push({ ...item, id: crypto.randomUUID() });
+  };
+
+  DataSDK.removeFromCart = function (cartItemId) {
+    state.cart = state.cart.filter(i => i.id !== cartItemId);
+  };
+
+  DataSDK.getCart = function () {
+    return state.cart;
+  };
+
+  DataSDK.getCartTotal = function () {
+    return state.cart.reduce((sum, item) => sum + (item.price || 0), 0);
+  };
+
+  DataSDK.clearCart = function () {
+    state.cart = [];
+  };
+
+  /* ---------- Utils ---------- */
+  DataSDK.getState = function () {
+    return JSON.parse(JSON.stringify(state));
+  };
+
+  global.DataSDK = DataSDK;
+})(window);
+
+  </script>
+  <script>
+    /* =========================
+   Element SDK
+   Handles DOM & UI helpers
+========================= */
+
+(function (global) {
+  const ElementSDK = {};
+
+  /* ---------- Element Creation ---------- */
+  ElementSDK.createEl = function (tag, options = {}, children = []) {
+    const el = document.createElement(tag);
+
+    if (options.id) el.id = options.id;
+    if (options.class) el.className = options.class;
+    if (options.text) el.textContent = options.text;
+    if (options.html) el.innerHTML = options.html;
+
+    if (options.attrs) {
+      Object.entries(options.attrs).forEach(([k, v]) =>
+        el.setAttribute(k, v)
+      );
+    }
+
+    if (options.onClick) {
+      el.addEventListener("click", options.onClick);
+    }
+
+    children.forEach(child => {
+      if (typeof child === "string") {
+        el.appendChild(document.createTextNode(child));
+      } else if (child) {
+        el.appendChild(child);
+      }
+    });
+
+    return el;
+  };
+
+  /* ---------- Render Helpers ---------- */
+  ElementSDK.clear = function (el) {
+    el.innerHTML = "";
+  };
+
+  ElementSDK.mount = function (parent, child) {
+    parent.appendChild(child);
+  };
+
+  /* ---------- UI Components ---------- */
+
+  ElementSDK.CategoryCard = function ({ id, name, image, onSelect }) {
+    return ElementSDK.createEl("div", {
+      class:
+        "category-card bg-white rounded-xl p-4 text-center fade-in",
+      onClick: () => onSelect(id)
+    }, [
+      ElementSDK.createEl("img", {
+        attrs: { src: image, alt: name },
+        class: "w-full h-32 object-cover rounded-lg mb-3"
+      }),
+      ElementSDK.createEl("h3", {
+        text: name,
+        class: "heading-font text-lg font-semibold"
+      })
+    ]);
+  };
+
+  ElementSDK.MenuItemCard = function ({ name, description, price, onAdd }) {
+    return ElementSDK.createEl("div", {
+      class:
+        "menu-item bg-white rounded-xl p-4 shadow-sm fade-in"
+    }, [
+      ElementSDK.createEl("h4", {
+        text: name,
+        class: "font-semibold text-lg"
+      }),
+      ElementSDK.createEl("p", {
+        text: description,
+        class: "text-sm text-gray-500 mt-1"
+      }),
+      ElementSDK.createEl("div", {
+        class: "flex justify-between items-center mt-3"
+      }, [
+        ElementSDK.createEl("span", {
+          text: `₱${price.toFixed(2)}`,
+          class: "font-medium"
+        }),
+        ElementSDK.createEl("button", {
+          text: "Add",
+          class:
+            "px-4 py-1 bg-black text-white rounded-lg",
+          onClick: onAdd
+        })
+      ])
+    ]);
+  };
+
+  ElementSDK.CartBadge = function (count) {
+    return ElementSDK.createEl("span", {
+      text: count,
+      class:
+        "cart-badge bg-red-600 text-white text-xs px-2 py-1 rounded-full"
+    });
+  };
+
+  global.ElementSDK = ElementSDK;
+})(window);
+
+  </script>
+  <script src="tailwindcss.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&amp;family=Inter:wght@300;400;500;600&amp;display=swap" rel="stylesheet">
+  <style>
+    body {
+      box-sizing: border-box;
+      font-family: 'Inter', sans-serif;
+    }
+    
+    .heading-font {
+      font-family: 'Playfair Display', serif;
+    }
+    
+    .category-card {
+      transition: all 0.3s ease;
+      border: 2px solid transparent;
+    }
+    
+    .category-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 24px rgba(0,0,0,0.12);
+    }
+    
+    .menu-item {
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+    
+    .menu-item:hover {
+      transform: scale(1.02);
+    }
+    
+    .add-on-chip {
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+    
+    .add-on-chip:hover {
+      transform: translateY(-2px);
+    }
+    
+    .add-on-chip.selected {
+      transform: scale(1.05);
+    }
+    
+    .cart-badge {
+      animation: pulse 0.5s ease-in-out;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.2); }
+    }
+    
+    .fade-in {
+      animation: fadeIn 0.3s ease-in;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+  <style>@view-transition { navigation: auto; }</style>
+ </head>
+ <body class="h-full">
+  <div id="app" class="h-full w-full overflow-auto"></div>
+  <script>
+    const defaultConfig = {
+      background_color: "#faf8f5",
+      surface_color: "#ffffff",
+      text_color: "#2d2d2d",
+      primary_action_color: "#d4772e",
+      secondary_action_color: "#8b7355",
+      font_family: "Inter",
+      font_size: 16,
+      restaurant_name: "Bella Cucina",
+      tagline: "Build Your Perfect Meal",
+      appetizer_category: "Appetizers",
+      pasta_category: "Pastas",
+      dessert_category: "Desserts"
+    };
+
+    const menuData = {
+      appetizers: [
+        { name: "Bruschetta Trio", price: 12, description: "Tomato basil, mushroom, olive tapenade" },
+        { name: "Burrata & Prosciutto", price: 11, description: "Fresh burrata, crispy prosciutto, arugula" },
+        { name: "Calamari Fritti", price: 10, description: "Crispy calamari, lemon aioli, marinara" },
+        { name: "Caprese Salad", price: 9, description: "Heirloom tomatoes, buffalo mozzarella, basil" },
+        { name: "Antipasto Board", price: 12, description: "Cured meats, cheeses, marinated vegetables" }
+      ],
+      pastas: [
+        { name: "Spaghetti Carbonara", basePrice: 14, description: "Creamy sauce, pancetta, parmesan" },
+        { name: "Fettuccine Alfredo", basePrice: 14, description: "Rich parmesan cream sauce" },
+        { name: "Penne Arrabbiata", basePrice: 15, description: "Spicy tomato sauce, garlic, chili" },
+        { name: "Rigatoni Bolognese", basePrice: 16, description: "Slow-cooked meat sauce, herbs" },
+        { name: "Linguine Pesto", basePrice: 15, description: "Fresh basil pesto, pine nuts" },
+        { name: "Pappardelle Mushroom", basePrice: 17, description: "Wild mushrooms, truffle cream" }
+      ],
+      proteins: [
+        { name: "Grilled Chicken", price: 5 },
+        { name: "Shrimp", price: 7 },
+        { name: "Italian Sausage", price: 4 },
+        { name: "Meatballs", price: 4 }
+      ],
+      desserts: [
+        { name: "Tiramisu", price: 8, description: "Classic espresso-soaked ladyfingers" },
+        { name: "Panna Cotta", price: 7, description: "Vanilla cream, berry compote" },
+        { name: "Cannoli", price: 6, description: "Crispy shells, sweet ricotta filling" },
+        { name: "Gelato Trio", price: 9, description: "Pistachio, stracciatella, hazelnut" },
+        { name: "Chocolate Torte", price: 8, description: "Rich flourless chocolate cake" }
+      ]
+    };
+
+    let currentOrder = [];
+    let orderRecordCount = 0;
+    let isInitialized = false;
+
+    const dataHandler = {
+      onDataChanged(data) {
+        currentOrder = data;
+        orderRecordCount = data.length;
+        if (isInitialized) {
+          updateCartDisplay();
+        }
+      }
+    };
+
+    async function initializeApp() {
+      const initResult = await window.dataSdk.init(dataHandler);
+      if (!initResult.isOk) {
+        console.error("Failed to initialize data SDK");
+        return;
+      }
+      isInitialized = true;
+      renderApp();
+    }
+
+    async function addItemToOrder(category, itemName, basePrice, protein = null, proteinPrice = 0) {
+      if (orderRecordCount >= 999) {
+        showToast("Order limit reached (999 items). Please review your cart.", "error");
+        return;
+      }
+
+      const totalPrice = basePrice + proteinPrice;
+      const orderItem = {
+        category: category,
+        item_name: protein ? `${itemName} with ${protein}` : itemName,
+        base_price: basePrice,
+        protein: protein || "",
+        protein_price: proteinPrice,
+        quantity: 1,
+        total_price: totalPrice,
+        timestamp: new Date().toISOString()
+      };
+
+      showLoadingState();
+      const result = await window.dataSdk.create(orderItem);
+      hideLoadingState();
+
+      if (result.isOk) {
+        showToast("Added to cart!", "success");
+      } else {
+        showToast("Failed to add item. Please try again.", "error");
+      }
+    }
+
+    async function removeItemFromOrder(item) {
+      showLoadingState();
+      const result = await window.dataSdk.delete(item);
+      hideLoadingState();
+
+      if (result.isOk) {
+        showToast("Item removed", "success");
+      } else {
+        showToast("Failed to remove item. Please try again.", "error");
+      }
+    }
+
+    function showLoadingState() {
+      const loader = document.getElementById('loading-overlay');
+      if (loader) loader.style.display = 'flex';
+    }
+
+    function hideLoadingState() {
+      const loader = document.getElementById('loading-overlay');
+      if (loader) loader.style.display = 'none';
+    }
+
+    function showToast(message, type = "success") {
+      const toast = document.createElement('div');
+      toast.className = `fixed top-4 right-4 px-6 py-3 rounded-lg shadow-lg text-white z-50 fade-in ${type === 'success' ? 'bg-green-600' : 'bg-red-600'}`;
+      toast.textContent = message;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
+    }
+
+    function updateCartDisplay() {
+      const cartCount = document.getElementById('cart-count');
+      const cartTotal = document.getElementById('cart-total');
+      const cartItems = document.getElementById('cart-items');
+
+      if (cartCount) {
+        cartCount.textContent = currentOrder.length;
+        if (currentOrder.length > 0) {
+          cartCount.classList.add('cart-badge');
+          setTimeout(() => cartCount.classList.remove('cart-badge'), 500);
+        }
+      }
+
+      if (cartTotal) {
+        const total = currentOrder.reduce((sum, item) => sum + item.total_price, 0);
+        cartTotal.textContent = `$${total.toFixed(2)}`;
+      }
+
+      if (cartItems) {
+        if (currentOrder.length === 0) {
+          cartItems.innerHTML = '<p style="color: #999; text-align: center; padding: 2rem;">Your cart is empty</p>';
+        } else {
+          cartItems.innerHTML = currentOrder.map(item => `
+            <div class="flex justify-between items-start p-3 border-b fade-in" style="border-color: #e5e5e5;">
+              <div style="flex: 1;">
+                <p style="font-weight: 500; margin-bottom: 0.25rem;">${item.item_name}</p>
+                <p style="font-size: 0.875rem; color: #666;">${item.category}</p>
+              </div>
+              <div style="text-align: right; margin-left: 1rem;">
+                <p style="font-weight: 600; margin-bottom: 0.5rem;">$${item.total_price.toFixed(2)}</p>
+                <button onclick="removeItemFromOrder(currentOrder.find(i => i.__backendId === '${item.__backendId}'))" 
+                        style="font-size: 0.75rem; padding: 0.25rem 0.5rem; border-radius: 0.25rem; border: 1px solid #ddd; background: white; cursor: pointer; transition: all 0.2s;"
+                        onmouseover="this.style.backgroundColor='#fee'; this.style.borderColor='#ef4444'; this.style.color='#ef4444'"
+                        onmouseout="this.style.backgroundColor='white'; this.style.borderColor='#ddd'; this.style.color='inherit'">
+                  Remove
+                </button>
+              </div>
+            </div>
+          `).join('');
+        }
+      }
+    }
+
+    function openItemModal(category, item, hasProtein = false) {
+      const modal = document.createElement('div');
+      modal.id = 'item-modal';
+      modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        padding: 1rem;
+      `;
+
+      const config = window.elementSdk?.config || defaultConfig;
+      const customFont = config.font_family || defaultConfig.font_family;
+      const baseSize = config.font_size || defaultConfig.font_size;
+      const bgColor = config.background_color || defaultConfig.background_color;
+      const surfaceColor = config.surface_color || defaultConfig.surface_color;
+      const textColor = config.text_color || defaultConfig.text_color;
+      const primaryColor = config.primary_action_color || defaultConfig.primary_action_color;
+      const secondaryColor = config.secondary_action_color || defaultConfig.secondary_action_color;
+
+      let selectedProtein = null;
+      let selectedProteinPrice = 0;
+
+      const modalContent = document.createElement('div');
+      modalContent.style.cssText = `
+        background: ${surfaceColor};
+        border-radius: 1rem;
+        padding: 2rem;
+        max-width: 500px;
+        width: 100%;
+        max-height: 80vh;
+        overflow-y: auto;
+      `;
+
+      modalContent.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1.5rem;">
+          <h3 class="heading-font" style="font-size: ${baseSize * 1.75}px; font-weight: 600; color: ${textColor}; margin: 0;">${item.name}</h3>
+          <button id="close-modal" style="background: none; border: none; font-size: ${baseSize * 1.5}px; cursor: pointer; color: ${textColor}; padding: 0; line-height: 1;">&times;</button>
+        </div>
+        <p style="color: ${textColor}; opacity: 0.7; margin-bottom: 1.5rem; font-size: ${baseSize}px;">${item.description}</p>
+        <p style="font-size: ${baseSize * 1.25}px; font-weight: 600; color: ${primaryColor}; margin-bottom: 1.5rem;">$${item.basePrice || item.price}</p>
+        ${hasProtein ? `
+          <div style="margin-bottom: 1.5rem;">
+            <p style="font-weight: 600; margin-bottom: 0.75rem; color: ${textColor}; font-size: ${baseSize}px;">Add Protein</p>
+            <div id="protein-options" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem;">
+              ${menuData.proteins.map(protein => `
+                <button class="protein-option" data-protein="${protein.name}" data-price="${protein.price}"
+                        style="padding: 0.75rem; border: 2px solid #e5e5e5; background: white; border-radius: 0.5rem; cursor: pointer; text-align: left; transition: all 0.2s; font-size: ${baseSize * 0.875}px;">
+                  <div style="font-weight: 500; color: ${textColor};">${protein.name}</div>
+                  <div style="font-size: ${baseSize * 0.75}px; color: ${secondaryColor};">+$${protein.price}</div>
+                </button>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+        <button id="add-to-cart-btn" style="width: 100%; padding: 1rem; background: ${primaryColor}; color: white; border: none; border-radius: 0.5rem; font-weight: 600; cursor: pointer; transition: all 0.2s; font-size: ${baseSize}px;">
+          Add to Cart
+        </button>
+      `;
+
+      modal.appendChild(modalContent);
+      document.body.appendChild(modal);
+
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+          modal.remove();
+        }
+      });
+
+      document.getElementById('close-modal').addEventListener('click', () => modal.remove());
+
+      if (hasProtein) {
+        const proteinOptions = modalContent.querySelectorAll('.protein-option');
+        proteinOptions.forEach(btn => {
+          btn.addEventListener('click', () => {
+            proteinOptions.forEach(b => {
+              b.style.borderColor = '#e5e5e5';
+              b.style.background = 'white';
+            });
+            btn.style.borderColor = primaryColor;
+            btn.style.background = `${primaryColor}15`;
+            selectedProtein = btn.dataset.protein;
+            selectedProteinPrice = parseFloat(btn.dataset.price);
+          });
+        });
+      }
+
+      document.getElementById('add-to-cart-btn').addEventListener('click', async () => {
+        await addItemToOrder(
+          category,
+          item.name,
+          item.basePrice || item.price,
+          selectedProtein,
+          selectedProteinPrice
+        );
+        modal.remove();
+      });
+    }
+
+    function renderApp() {
+      const config = window.elementSdk?.config || defaultConfig;
+      const customFont = config.font_family || defaultConfig.font_family;
+      const baseFontStack = 'Inter, sans-serif';
+      const headingFontStack = 'Playfair Display, serif';
+      const baseSize = config.font_size || defaultConfig.font_size;
+      const bgColor = config.background_color || defaultConfig.background_color;
+      const surfaceColor = config.surface_color || defaultConfig.surface_color;
+      const textColor = config.text_color || defaultConfig.text_color;
+      const primaryColor = config.primary_action_color || defaultConfig.primary_action_color;
+      const secondaryColor = config.secondary_action_color || defaultConfig.secondary_action_color;
+      const restaurantName = config.restaurant_name || defaultConfig.restaurant_name;
+      const tagline = config.tagline || defaultConfig.tagline;
+      const appetizerCategory = config.appetizer_category || defaultConfig.appetizer_category;
+      const pastaCategory = config.pasta_category || defaultConfig.pasta_category;
+      const dessertCategory = config.dessert_category || defaultConfig.dessert_category;
+
+      const app = document.getElementById('app');
+      app.style.background = bgColor;
+      app.style.fontFamily = `${customFont}, ${baseFontStack}`;
+      app.innerHTML = `
+        <div style="min-height: 100%; display: flex; flex-direction: column;">
+          <!-- Header -->
+          <header style="background: ${surfaceColor}; border-bottom: 1px solid #e5e5e5; padding: 1.5rem 2rem; position: sticky; top: 0; z-index: 100;">
+            <div style="max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <h1 class="heading-font" style="font-family: ${customFont}, ${headingFontStack}; font-size: ${baseSize * 2}px; font-weight: 700; color: ${textColor}; margin: 0;">${restaurantName}</h1>
+                <p style="color: ${secondaryColor}; font-size: ${baseSize * 0.875}px; margin: 0.25rem 0 0 0;">${tagline}</p>
+              </div>
+              <div style="position: relative; cursor: pointer;" id="cart-toggle">
+                <svg width="${baseSize * 2}" height="${baseSize * 2}" viewBox="0 0 24 24" fill="none" stroke="${textColor}" stroke-width="2">
+                  <circle cx="9" cy="21" r="1"/>
+                  <circle cx="20" cy="21" r="1"/>
+                  <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
+                </svg>
+                <span id="cart-count" style="position: absolute; top: -0.5rem; right: -0.5rem; background: ${primaryColor}; color: white; border-radius: 50%; width: 1.25rem; height: 1.25rem; display: flex; align-items: center; justify-content: center; font-size: ${baseSize * 0.625}px; font-weight: 600;">0</span>
+              </div>
+            </div>
+          </header>
+
+          <!-- Main Content -->
+          <main style="flex: 1; padding: 2rem; max-width: 1200px; margin: 0 auto; width: 100%;">
+            <!-- Appetizers -->
+            <section style="margin-bottom: 3rem;">
+              <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem;">
+                <div style="width: 3rem; height: 3rem; border-radius: 50%; background: linear-gradient(135deg, #e8b4a8 0%, #d4772e 100%); display: flex; align-items: center; justify-content: center;">
+                  <span style="font-size: ${baseSize * 1.25}px;">🍴</span>
+                </div>
+                <h2 class="heading-font" style="font-family: ${customFont}, ${headingFontStack}; font-size: ${baseSize * 1.75}px; font-weight: 600; color: ${textColor}; margin: 0;">${appetizerCategory}</h2>
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem;">
+                ${menuData.appetizers.map(item => `
+                  <div class="menu-item category-card" onclick="openItemModal('${appetizerCategory}', ${JSON.stringify(item).replace(/"/g, '&quot;')}, false)"
+                       style="background: ${surfaceColor}; padding: 1.5rem; border-radius: 1rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.75rem;">
+                      <h3 style="font-size: ${baseSize * 1.125}px; font-weight: 600; color: ${textColor}; margin: 0; flex: 1;">${item.name}</h3>
+                      <span style="font-size: ${baseSize * 1.125}px; font-weight: 600; color: ${primaryColor}; margin-left: 1rem;">$${item.price}</span>
+                    </div>
+                    <p style="color: ${textColor}; opacity: 0.6; font-size: ${baseSize * 0.875}px; margin: 0;">${item.description}</p>
+                  </div>
+                `).join('')}
+              </div>
+            </section>
+
+            <!-- Pastas -->
+            <section style="margin-bottom: 3rem;">
+              <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem;">
+                <div style="width: 3rem; height: 3rem; border-radius: 50%; background: linear-gradient(135deg, #f4d4a8 0%, #d4772e 100%); display: flex; align-items: center; justify-content: center;">
+                  <span style="font-size: ${baseSize * 1.25}px;">🍝</span>
+                </div>
+                <h2 class="heading-font" style="font-family: ${customFont}, ${headingFontStack}; font-size: ${baseSize * 1.75}px; font-weight: 600; color: ${textColor}; margin: 0;">${pastaCategory}</h2>
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem;">
+                ${menuData.pastas.map(item => `
+                  <div class="menu-item category-card" onclick="openItemModal('${pastaCategory}', ${JSON.stringify(item).replace(/"/g, '&quot;')}, true)"
+                       style="background: ${surfaceColor}; padding: 1.5rem; border-radius: 1rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08); position: relative;">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.75rem;">
+                      <h3 style="font-size: ${baseSize * 1.125}px; font-weight: 600; color: ${textColor}; margin: 0; flex: 1;">${item.name}</h3>
+                      <span style="font-size: ${baseSize * 1.125}px; font-weight: 600; color: ${primaryColor}; margin-left: 1rem;">$${item.basePrice}</span>
+                    </div>
+                    <p style="color: ${textColor}; opacity: 0.6; font-size: ${baseSize * 0.875}px; margin: 0 0 0.75rem 0;">${item.description}</p>
+                    <div style="display: inline-block; padding: 0.25rem 0.75rem; background: ${primaryColor}20; color: ${primaryColor}; border-radius: 1rem; font-size: ${baseSize * 0.75}px; font-weight: 500;">
+                      + Add Protein
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            </section>
+
+            <!-- Desserts -->
+            <section>
+              <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem;">
+                <div style="width: 3rem; height: 3rem; border-radius: 50%; background: linear-gradient(135deg, #e8c4d8 0%, #d4772e 100%); display: flex; align-items: center; justify-content: center;">
+                  <span style="font-size: ${baseSize * 1.25}px;">🍰</span>
+                </div>
+                <h2 class="heading-font" style="font-family: ${customFont}, ${headingFontStack}; font-size: ${baseSize * 1.75}px; font-weight: 600; color: ${textColor}; margin: 0;">${dessertCategory}</h2>
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem;">
+                ${menuData.desserts.map(item => `
+                  <div class="menu-item category-card" onclick="openItemModal('${dessertCategory}', ${JSON.stringify(item).replace(/"/g, '&quot;')}, false)"
+                       style="background: ${surfaceColor}; padding: 1.5rem; border-radius: 1rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.75rem;">
+                      <h3 style="font-size: ${baseSize * 1.125}px; font-weight: 600; color: ${textColor}; margin: 0; flex: 1;">${item.name}</h3>
+                      <span style="font-size: ${baseSize * 1.125}px; font-weight: 600; color: ${primaryColor}; margin-left: 1rem;">$${item.price}</span>
+                    </div>
+                    <p style="color: ${textColor}; opacity: 0.6; font-size: ${baseSize * 0.875}px; margin: 0;">${item.description}</p>
+                  </div>
+                `).join('')}
+              </div>
+            </section>
+          </main>
+        </div>
+
+        <!-- Cart Sidebar -->
+        <div id="cart-sidebar" style="position: fixed; right: -400px; top: 0; width: 400px; height: 100%; background: ${surfaceColor}; box-shadow: -4px 0 24px rgba(0,0,0,0.15); transition: right 0.3s ease; z-index: 200; display: flex; flex-direction: column;">
+          <div style="padding: 1.5rem; border-bottom: 1px solid #e5e5e5;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <h3 class="heading-font" style="font-family: ${customFont}, ${headingFontStack}; font-size: ${baseSize * 1.5}px; font-weight: 600; color: ${textColor}; margin: 0;">Your Order</h3>
+              <button id="close-cart" style="background: none; border: none; font-size: ${baseSize * 1.5}px; cursor: pointer; color: ${textColor}; padding: 0; line-height: 1;">&times;</button>
+            </div>
+          </div>
+          <div id="cart-items" style="flex: 1; overflow-y: auto; padding: 1rem;">
+            <p style="color: #999; text-align: center; padding: 2rem;">Your cart is empty</p>
+          </div>
+          <div style="padding: 1.5rem; border-top: 1px solid #e5e5e5;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+              <span style="font-size: ${baseSize * 1.125}px; font-weight: 600; color: ${textColor};">Total</span>
+              <span id="cart-total" style="font-size: ${baseSize * 1.5}px; font-weight: 700; color: ${primaryColor};">$0.00</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Loading Overlay -->
+        <div id="loading-overlay" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.3); z-index: 300; align-items: center; justify-content: center;">
+          <div style="background: ${surfaceColor}; padding: 2rem; border-radius: 1rem; display: flex; align-items: center; gap: 1rem;">
+            <div style="width: 2rem; height: 2rem; border: 3px solid ${primaryColor}30; border-top-color: ${primaryColor}; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+            <span style="color: ${textColor}; font-weight: 500; font-size: ${baseSize}px;">Processing...</span>
+          </div>
+        </div>
+
+        <style>
+          @keyframes spin {
+            to { transform: rotate(360deg); }
+          }
+        </style>
+      `;
+
+      // Cart toggle functionality
+      const cartToggle = document.getElementById('cart-toggle');
+      const cartSidebar = document.getElementById('cart-sidebar');
+      const closeCart = document.getElementById('close-cart');
+
+      cartToggle.addEventListener('click', () => {
+        cartSidebar.style.right = '0';
+      });
+
+      closeCart.addEventListener('click', () => {
+        cartSidebar.style.right = '-400px';
+      });
+
+      updateCartDisplay();
+    }
+
+    async function onConfigChange(config) {
+      renderApp();
+    }
+
+    // Initialize Element SDK
+    if (window.elementSdk) {
+      window.elementSdk.init({
+        defaultConfig,
+        onConfigChange,
+        mapToCapabilities: (config) => ({
+          recolorables: [
+            {
+              get: () => config.background_color || defaultConfig.background_color,
+              set: (value) => {
+                config.background_color = value;
+                window.elementSdk.setConfig({ background_color: value });
+              }
+            },
+            {
+              get: () => config.surface_color || defaultConfig.surface_color,
+              set: (value) => {
+                config.surface_color = value;
+                window.elementSdk.setConfig({ surface_color: value });
+              }
+            },
+            {
+              get: () => config.text_color || defaultConfig.text_color,
+              set: (value) => {
+                config.text_color = value;
+                window.elementSdk.setConfig({ text_color: value });
+              }
+            },
+            {
+              get: () => config.primary_action_color || defaultConfig.primary_action_color,
+              set: (value) => {
+                config.primary_action_color = value;
+                window.elementSdk.setConfig({ primary_action_color: value });
+              }
+            },
+            {
+              get: () => config.secondary_action_color || defaultConfig.secondary_action_color,
+              set: (value) => {
+                config.secondary_action_color = value;
+                window.elementSdk.setConfig({ secondary_action_color: value });
+              }
+            }
+          ],
+          borderables: [],
+          fontEditable: {
+            get: () => config.font_family || defaultConfig.font_family,
+            set: (value) => {
+              config.font_family = value;
+              window.elementSdk.setConfig({ font_family: value });
+            }
+          },
+          fontSizeable: {
+            get: () => config.font_size || defaultConfig.font_size,
+            set: (value) => {
+              config.font_size = value;
+              window.elementSdk.setConfig({ font_size: value });
+            }
+          }
+        }),
+        mapToEditPanelValues: (config) => new Map([
+          ["restaurant_name", config.restaurant_name || defaultConfig.restaurant_name],
+          ["tagline", config.tagline || defaultConfig.tagline],
+          ["appetizer_category", config.appetizer_category || defaultConfig.appetizer_category],
+          ["pasta_category", config.pasta_category || defaultConfig.pasta_category],
+          ["dessert_category", config.dessert_category || defaultConfig.dessert_category]
+        ])
+      });
+    }
+
+    // Start the app
+    document.addEventListener('DOMContentLoaded', initializeApp);
+  </script>
+ </body>
